@@ -12,8 +12,12 @@ using Funbit.Ets.Telemetry.Server.Data;
 using Funbit.Ets.Telemetry.Server.Helpers;
 using Funbit.Ets.Telemetry.Server.Setup;
 using Microsoft.Owin.Hosting;
+using Funbit.Ets.Telemetry.Server.Models;
 using SCSSdkClient;
 using SCSSdkClient.Object;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Z.EntityFramework.Plus;
 
 namespace Funbit.Ets.Telemetry.Server
 {
@@ -21,6 +25,7 @@ namespace Funbit.Ets.Telemetry.Server
     {
         private static SCSSdkTelemetry Telemetry;
         protected internal static SCSTelemetry data;
+        private DBContext db = new DBContext();
 
         IDisposable _server;
         static readonly log4net.ILog Log = log4net.LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
@@ -123,6 +128,14 @@ namespace Funbit.Ets.Telemetry.Server
                 Activate();
                 Telemetry = new SCSSdkTelemetry();
                 Telemetry.Data += Telemetry_Data;
+                Telemetry.Ferry += TelemetryFerry;
+                Telemetry.Fined += TelemetryFine;
+                Telemetry.Tollgate += TelemetryTollGate;
+                Telemetry.Train += TelemetryTrainEvents;
+                Telemetry.JobStarted += TelemetryJobStarted;
+                Telemetry.JobDelivered += TelemetryJobEnded;
+                this.WindowState = FormWindowState.Minimized;
+                this.Hide();
             }
             catch (Exception ex)
             {
@@ -141,7 +154,7 @@ namespace Funbit.Ets.Telemetry.Server
 
             // install or uninstall server if needed
             Setup();
-
+            ResetEventsDB();
             // start WebApi server
             Start();
         }
@@ -155,11 +168,6 @@ namespace Funbit.Ets.Telemetry.Server
         void closeToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Close();
-        }
-
-        void trayIcon_MouseDoubleClick(object sender, MouseEventArgs e)
-        {
-            WindowState = FormWindowState.Normal;
         }
 
         void statusUpdateTimer_Tick(object sender, EventArgs e)
@@ -180,10 +188,12 @@ namespace Funbit.Ets.Telemetry.Server
                 {
                     statusLabel.Text = $"Simulator is running ({Ets2ProcessHelper.LastRunningGameName})";
                     statusLabel.ForeColor = Color.Teal;
+                    trayIcon.Text = "Simulator is running...";
                 }
                 else
                 {
                     statusLabel.Text = @"Simulator is not running";
+                    trayIcon.Text = "Simulator is not running...";
                     statusLabel.ForeColor = Color.FromArgb(240, 55, 30);
                 }
             }
@@ -219,6 +229,7 @@ namespace Funbit.Ets.Telemetry.Server
         {
             var selectedInterface = (NetworkInterfaceInfo) interfacesDropDown.SelectedItem;
             apiUrlLabel.Text = IpToEndpointUrl(selectedInterface.Ip) + Ets2TelemetryController.TelemetryApiUriPath;
+            linkLabel1.Text = IpToEndpointUrl(selectedInterface.Ip) + Ets2TelemetryController.TelemetryEventApiUriPath;
             ipAddressLabel.Text = selectedInterface.Ip;
             Settings.Instance.DefaultNetworkInterfaceId = selectedInterface.Id;
             Settings.Instance.Save();
@@ -265,6 +276,90 @@ namespace Funbit.Ets.Telemetry.Server
         void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
             // TODO: implement later
+        }
+
+        private void TelemetryJobStarted(object sender, EventArgs e)
+        {
+            JobStatus js = db.JobStatuses.FirstOrDefault();
+            js.JobStarted = true;
+            js.JobDelivered = false;
+            db.SaveChanges();
+        }
+
+        private void TelemetryJobEnded(object sender, EventArgs e)
+        {
+            JobStatus js = db.JobStatuses.FirstOrDefault();
+            js.JobStarted = false;
+            js.JobDelivered = true;
+            db.SaveChanges();
+        }
+
+        private async void TelemetryFerry(object sender, EventArgs e)
+        {
+            await Task.Delay(10000);
+            FerryEventModel fem = new FerryEventModel();
+            fem.PayAmount = data.GamePlay.FerryEvent.PayAmount;
+            fem.SourceId = data.GamePlay.FerryEvent.SourceId;
+            fem.SourceName = data.GamePlay.FerryEvent.SourceName;
+            fem.TargetId = data.GamePlay.FerryEvent.TargetId;
+            fem.TargetName = data.GamePlay.FerryEvent.TargetName;
+            db.FerryEventModels.Add(fem);
+            db.SaveChanges();
+        }
+
+        private async void TelemetryFine(object sender, EventArgs e)
+        {
+            await Task.Delay(10000);
+            FineEventModel fem = new FineEventModel();
+            fem.Amount = data.GamePlay.FinedEvent.Amount;
+            fem.Offence = data.GamePlay.FinedEvent.Offence.ToString();
+            db.FineEventModels.Add(fem);
+            db.SaveChanges();
+        }
+
+        private async void TelemetryTollGate(object sender, EventArgs e)
+        {
+            await Task.Delay(10000);
+            TollgateEventModel tem = new TollgateEventModel();
+            tem.PayAmount = data.GamePlay.TollgateEvent.PayAmount;
+            db.TollgateEventModels.Add(tem);
+            db.SaveChanges();
+        }
+
+        private async void TelemetryTrainEvents(object sender, EventArgs e)
+        {
+            await Task.Delay(10000);
+            TrainEventModel tem = new TrainEventModel();
+            tem.PayAmount = data.GamePlay.TrainEvent.PayAmount;
+            tem.SourceId = data.GamePlay.TrainEvent.SourceId;
+            tem.SourceName = data.GamePlay.TrainEvent.SourceName;
+            tem.TargetId = data.GamePlay.TrainEvent.TargetId;
+            tem.TargetName = data.GamePlay.TrainEvent.TargetName;
+            db.TrainEventModels.Add(tem);
+            db.SaveChanges();
+        }
+
+        void ResetEventsDB()
+        {
+            db.FerryEventModels.Delete();
+            db.FineEventModels.Delete();
+            db.TollgateEventModels.Delete();
+            db.TrainEventModels.Delete();
+            JobStatus js = db.JobStatuses.FirstOrDefault();
+            js.JobDelivered = false;
+            js.JobStarted = false;
+            db.SaveChanges();
+        }
+
+        void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            ProcessHelper.OpenUrl(((LinkLabel)sender).Text);
+        }
+
+        void trayIcon_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            this.Show();
+            WindowState = FormWindowState.Normal;
         }
     }
 }

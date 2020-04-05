@@ -112,8 +112,8 @@ namespace Funbit.Ets.Telemetry.Server.Setup
         {
             const string InstallationSkippedPath = "N/A";
             const string TelemetryDllName = "scs-telemetry.dll";
-            const string TelemetryX64DllMd5 = "A502FAEF0B13166A121BAB5E3879E608";
-            const string TelemetryX86DllMd5 = "A502FAEF0B13166A121BAB5E3879E608";
+            const string TelemetryX64DllMd5 = "CB2B0CE8F42525E8C4EB83AAE527DF54";
+            const string TelemetryX86DllMd5 = "CB2B0CE8F42525E8C4EB83AAE527DF54";
 
             readonly string _gameName;
 
